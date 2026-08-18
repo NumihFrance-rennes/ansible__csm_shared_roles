@@ -1,6 +1,6 @@
 namespace: csm
 name: shared_roles
-version: 1.0.0
+version: 1.0.8
 readme: README.md
 authors:
 - Romain Gautier <romain.gautier@sib.fr>

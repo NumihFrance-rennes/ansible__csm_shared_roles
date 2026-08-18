@@ -1,0 +1,144 @@
+---
+- name: Make a unique sha1
+  ansible.builtin.set_fact:
+    unique_id: "{{ ansible_date_time.epoch | hash('sha1') }}"
+
+###### List fs tree of src
+# Source files always live on the controller (template/copy src is controller-side),
+# so delegate find and realpath to localhost regardless of the target host.
+- name: List files
+  ansible.builtin.find:
+    paths: "{{ project_src_folder }}"
+    file_type: file
+    recurse: yes
+  register: files
+  delegate_to: localhost
+
+- name: List folders
+  ansible.builtin.find:
+    paths: "{{ project_src_folder }}"
+    file_type: directory
+    recurse: yes
+  register: folders
+  delegate_to: localhost
+
+###### Construction of correct paths
+- name: Make file paths relative
+  ansible.builtin.command: "realpath --relative-to={{ project_src_folder }} {{ item.path }}"
+  register: files_rel_path_cmd
+  loop: "{{ files.files }}"
+  delegate_to: localhost
+  changed_when: false
+
+- name: Make file paths relative
+  ansible.builtin.set_fact:
+    relative_files: "{{ files_rel_path_cmd.results | map(attribute='stdout') | list }}"
+
+- name: Make folder paths relative
+  ansible.builtin.command: "realpath --relative-to={{ project_src_folder }} {{ item.path }}"
+  register: relative_folder_path_cmd
+  loop: "{{ folders.files }}"
+  delegate_to: localhost
+  changed_when: false
+
+- name: Make folder paths relative
+  ansible.builtin.set_fact:
+    relative_folders: "{{ relative_folder_path_cmd.results | map(attribute='stdout') | list }}"
+
+########### Handle tmp project dest folder
+- name: contents of tmp project dest folder
+  ansible.builtin.find:
+    paths: "{{ project_tmp_dest_folder }}"
+    file_type: any
+  register: project_tmp_dest_folder_content
+
+- name: "Fail if tmp project dest folder is not empty"
+  ansible.builtin.fail:
+    msg: "{{ project_tmp_dest_folder }} is not empty. Aborting."
+  when: project_tmp_dest_folder_content.matched > 0
+
+- name: Cleanup tmp project dest folder
+  ansible.builtin.file:
+    path: "{{ project_tmp_dest_folder }}"
+    state: absent
+
+- name: Make target filesystem tree
+  ansible.builtin.file:
+    path: "{{ project_tmp_dest_folder }}/{{ item }}"
+    state: directory
+  loop: "{{ relative_folders + [ '' ] }}"
+
+############# Templatize and copy project
+
+- name: "Templatize docker compose project {{ project_name }}"
+  ansible.builtin.template:
+    src: "{{ project_src_folder }}/{{ item }}"
+    dest: "{{ project_tmp_dest_folder }}/{{ item }}"
+  loop: "{{ relative_files }}"
+  when: "item not in exclude_from_templating"
+
+- name: "Copy docker compose project {{ project_name }}"
+  ansible.builtin.copy:
+    src: "{{ project_src_folder }}/{{ item }}"
+    dest: "{{ project_tmp_dest_folder }}/{{ item }}"
+  loop: "{{ relative_files }}"
+  when: "item in exclude_from_templating"
+
+############### Deploy command
+####### Sane check on docker compose files
+# Unlike docker_stack, docker_compose_v2's `files` option expects file names
+# relative to `project_src`, not absolute paths. So the check below stats
+# absolute paths but keeps only the relative names in the final list.
+
+- name: "Check if docker compose files exists"
+  vars:
+    prefix: "{{ project_tmp_dest_folder }}/"
+    _docker_compose_files: "{{ docker_compose_files | map('regex_replace', '^', prefix) | list }}"
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ _docker_compose_files }}"
+  register: docker_compose_files_statuses
+
+- name: "Retain only existing docker compose files (relative names)"
+  vars:
+    _pairs: "{{ docker_compose_files | zip(docker_compose_files_statuses.results) | list }}"
+  ansible.builtin.set_fact:
+    existing_docker_compose_files: >-
+      {{ _pairs
+         | selectattr('1.stat.exists', 'defined')
+         | selectattr('1.stat.exists')
+         | map(attribute='0')
+         | list }}
+
+- name: "Fail if no compose files available"
+  ansible.builtin.fail:
+    msg: "No existing docker-compose files. Aborting."
+  when: existing_docker_compose_files | length == 0
+
+- name: Debug - docker-compose files
+  ansible.builtin.debug:
+    var: existing_docker_compose_files
+
+- name: "Deploy {{ project_name }}"
+  community.docker.docker_compose_v2:
+    state: present
+    project_name: "{{ project_name }}"
+    project_src: "{{ project_tmp_dest_folder }}"
+    docker_host: "{{ docker_host }}"
+    files: "{{ existing_docker_compose_files }}"
+
+############# Copy resolved project
+###
+- name: "Copy project folder"
+  ansible.builtin.copy:
+    src: "{{ project_tmp_dest_folder }}"
+    dest: "{{ copy_project_files_to }}"
+    remote_src: true
+  when: copy_project_files_to != ''
+
+############# Cleanups
+
+- name: Cleanup tmp project dest folder
+  ansible.builtin.file:
+    path: "{{ project_tmp_dest_folder }}"
+    state: absent

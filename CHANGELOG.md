@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.8]
+
+### Added
+
+- Add `docker_compose_deploy` role, adapting `docker_stack_deploy`'s deploy mechanism to plain `docker compose` (via `community.docker.docker_compose_v2`) instead of Docker Swarm
+
 ## [1.0.7]
 
 ### Added

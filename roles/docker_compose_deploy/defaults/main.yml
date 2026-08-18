@@ -1,0 +1,10 @@
+---
+project_name: "foo"
+project_src_folder: "foo"
+project_tmp_dest_folder: "/tmp/foo"
+copy_project_files_to: ""
+docker_host: "unix:///var/run/docker.sock"
+docker_compose_files:
+  - docker-compose.yml
+  - docker-compose.override.yml
+exclude_from_templating: []
