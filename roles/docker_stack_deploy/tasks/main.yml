@@ -3,7 +3,6 @@
   set_fact:
     unique_id: "{{ ansible_date_time.epoch | hash('sha1') }}"
 
-###### List fs tree of src
 # Source files always live on the controller (template/copy src is controller-side),
 # so delegate find and realpath to localhost regardless of the target host.
 - name: List files
@@ -22,7 +21,6 @@
   register: folders
   delegate_to: localhost
 
-###### Construction of correct paths
 - name: Make file paths relative
   command: "realpath --relative-to={{stack_src_folder}} {{item.path}}"
   register: files_rel_path_cmd
@@ -41,7 +39,6 @@
   set_fact:
     relative_folders: "{{relative_folder_path_cmd.results | map(attribute='stdout') | list}}"
 
-########### Handle tmp stack dest folder
 - name: contents of tmp stack dest folder
   find:
     paths: "{{stack_tmp_dest_folder}}"
@@ -64,8 +61,6 @@
     state: directory
   loop: "{{relative_folders + [ '' ]}}"
 
-############# Templatize and copy stack
-
 - name: "Templatize docker stack {{stack_name}}"
   template:
     src: "{{stack_src_folder}}/{{item}}"
@@ -79,9 +74,6 @@
     dest: "{{stack_tmp_dest_folder}}/{{item}}"
   loop: "{{relative_files}}"
   when: "item in exclude_from_templating"
-
-############### Deploy command
-####### Sane check on docker compose files
 
 - name: "Check if docker compose files exists"
   vars:
@@ -119,16 +111,12 @@
     compose: "{{existing_docker_compose_files}}"
     detach: "{{detach}}"
 
-############# Copy resolved stacks
-###
 - name: "Copy stack folder"
   copy:
     src: "{{stack_tmp_dest_folder}}"
     dest: "{{copy_stack_files_to}}"
     remote_src: true
   when: copy_stack_files_to != ''
-
-############# Cleanups
 
 - name: Cleanup tmp stack dest folder
   file:

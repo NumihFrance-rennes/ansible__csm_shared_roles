@@ -9,7 +9,6 @@
     msg: "state is invalid. Abort."
   when: state != 'present' and state != 'absent'
 
-##########
 - name: Setup ssh-agent
   shell: |
     eval "$(ssh-agent -s)" > /dev/null
