@@ -56,6 +56,5 @@ The role set these facts
       role: csm.shared_roles.ssh_agent
       vars:
           existing_agent: "{{ssh_agent_env}}"
-          priv_ssh_key_path: ~/.ssh/id_rsa
-          state: "present"
+          state: "absent"
 ```

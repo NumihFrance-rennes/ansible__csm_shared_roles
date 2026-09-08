@@ -3,7 +3,6 @@
   ansible.builtin.set_fact:
     unique_id: "{{ ansible_date_time.epoch | hash('sha1') }}"
 
-###### List fs tree of src
 # Source files always live on the controller (template/copy src is controller-side),
 # so delegate find and realpath to localhost regardless of the target host.
 - name: List files
@@ -22,7 +21,6 @@
   register: folders
   delegate_to: localhost
 
-###### Construction of correct paths
 - name: Make file paths relative
   ansible.builtin.command: "realpath --relative-to={{ project_src_folder }} {{ item.path }}"
   register: files_rel_path_cmd
@@ -45,7 +43,6 @@
   ansible.builtin.set_fact:
     relative_folders: "{{ relative_folder_path_cmd.results | map(attribute='stdout') | list }}"
 
-########### Handle tmp project dest folder
 - name: contents of tmp project dest folder
   ansible.builtin.find:
     paths: "{{ project_tmp_dest_folder }}"
@@ -68,8 +65,6 @@
     state: directory
   loop: "{{ relative_folders + [ '' ] }}"
 
-############# Templatize and copy project
-
 - name: "Templatize docker compose project {{ project_name }}"
   ansible.builtin.template:
     src: "{{ project_src_folder }}/{{ item }}"
@@ -84,12 +79,9 @@
   loop: "{{ relative_files }}"
   when: "item in exclude_from_templating"
 
-############### Deploy command
-####### Sane check on docker compose files
 # Unlike docker_stack, docker_compose_v2's `files` option expects file names
-# relative to `project_src`, not absolute paths. So the check below stats
-# absolute paths but keeps only the relative names in the final list.
-
+# relative to `project_src`, not absolute paths — stat absolute paths but
+# keep only the relative names below.
 - name: "Check if docker compose files exists"
   vars:
     prefix: "{{ project_tmp_dest_folder }}/"
@@ -127,16 +119,12 @@
     docker_host: "{{ docker_host }}"
     files: "{{ existing_docker_compose_files }}"
 
-############# Copy resolved project
-###
 - name: "Copy project folder"
   ansible.builtin.copy:
     src: "{{ project_tmp_dest_folder }}"
     dest: "{{ copy_project_files_to }}"
     remote_src: true
   when: copy_project_files_to != ''
-
-############# Cleanups
 
 - name: Cleanup tmp project dest folder
   ansible.builtin.file:
