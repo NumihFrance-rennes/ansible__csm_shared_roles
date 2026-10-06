@@ -1,7 +1,7 @@
 ---
 - name: Make a unique sha1
   set_fact:
-    unique_id: "{{ ansible_date_time.epoch | hash('sha1') }}"
+    unique_id: "{{ ansible_facts['date_time']['epoch'] | hash('sha1') }}"
 
 # Source files always live on the controller (template/copy src is controller-side),
 # so delegate find and realpath to localhost regardless of the target host.
@@ -39,16 +39,22 @@
   set_fact:
     relative_folders: "{{relative_folder_path_cmd.results | map(attribute='stdout') | list}}"
 
+- name: Stat tmp stack dest folder
+  stat:
+    path: "{{stack_tmp_dest_folder}}"
+  register: stack_tmp_dest_folder_stat
+
 - name: contents of tmp stack dest folder
   find:
     paths: "{{stack_tmp_dest_folder}}"
     file_type: any
   register: stack_tmp_dest_folder_content
+  when: stack_tmp_dest_folder_stat.stat.isdir | default(false)
 
 - name: "Fail if tmp stack dest folder is not empty"
   ansible.builtin.fail:
     msg: "{{stack_tmp_dest_folder}} is not empty. Aborting."
-  when: stack_tmp_dest_folder_content.matched > 0
+  when: stack_tmp_dest_folder_content.matched | default(0) > 0
 
 - name: Cleanup tmp stack dest folder
   file:

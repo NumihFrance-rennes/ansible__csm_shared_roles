@@ -1,7 +1,7 @@
 ---
 - name: Make a unique sha1
   ansible.builtin.set_fact:
-    unique_id: "{{ ansible_date_time.epoch | hash('sha1') }}"
+    unique_id: "{{ ansible_facts['date_time']['epoch'] | hash('sha1') }}"
 
 # Source files always live on the controller (template/copy src is controller-side),
 # so delegate find and realpath to localhost regardless of the target host.
@@ -43,16 +43,22 @@
   ansible.builtin.set_fact:
     relative_folders: "{{ relative_folder_path_cmd.results | map(attribute='stdout') | list }}"
 
+- name: Stat tmp project dest folder
+  ansible.builtin.stat:
+    path: "{{ project_tmp_dest_folder }}"
+  register: project_tmp_dest_folder_stat
+
 - name: contents of tmp project dest folder
   ansible.builtin.find:
     paths: "{{ project_tmp_dest_folder }}"
     file_type: any
   register: project_tmp_dest_folder_content
+  when: project_tmp_dest_folder_stat.stat.isdir | default(false)
 
 - name: "Fail if tmp project dest folder is not empty"
   ansible.builtin.fail:
     msg: "{{ project_tmp_dest_folder }} is not empty. Aborting."
-  when: project_tmp_dest_folder_content.matched > 0
+  when: project_tmp_dest_folder_content.matched | default(0) > 0
 
 - name: Cleanup tmp project dest folder
   ansible.builtin.file:
